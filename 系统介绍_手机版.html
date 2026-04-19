@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>12306客服智能语音训练系统 · 旅顺通</title>
+<style>
+  :root {
+    --blue-dark: #0a1628;
+    --blue-mid: #0d2145;
+    --blue-accent: #1a4a8c;
+    --cyan: #00b4d8;
+    --cyan-light: #48cae4;
+    --gold: #f4a261;
+    --white: #f0f4ff;
+    --gray: #8fa3c8;
+    --green: #52b788;
+    --red: #e63946;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--blue-dark);
+    color: var(--white);
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 100vh;
+    width: 100vw;
+  }
+
+  /* ── 幻灯片容器 ── */
+  .deck { width: 100%; position: relative; }
+
+  .slide {
+    position: absolute; left: 0; right: 0; top: 0;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    justify-content: flex-start; align-items: center;
+    padding: 60px 16px 100px 16px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    transform: translateX(60px);
+  }
+  .slide.active {
+    opacity: 1; pointer-events: all; transform: translateX(0);
+  }
+  .slide.exit {
+    opacity: 0; transform: translateX(-60px);
+  }
+
+  /* ── 背景装饰 ── */
+  .slide::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 10% 90%, rgba(0,180,216,.08) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 90% 10%, rgba(26,74,140,.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* ── 顶部进度条 ── */
+  #progress-bar {
+    position: fixed; top: 0; left: 0; height: 3px;
+    background: linear-gradient(90deg, var(--cyan), var(--cyan-light));
+    transition: width 0.4s ease;
+    z-index: 100;
+  }
+
+  /* ── 底部导航 ── */
+  #nav {
+    position: fixed; bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: 12px;
+    z-index: 100;
+    background: rgba(10, 22, 40, 0.95);
+    padding: 10px 16px;
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,.15);
+  }
+  #nav button {
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.18);
+    color: var(--white);
+    padding: 8px 16px; border-radius: 20px;
+    cursor: pointer; font-size: 12px;
+    transition: background .2s;
+  }
+  #nav button:hover { background: rgba(0,180,216,.25); }
+  #slide-counter { color: var(--gray); font-size: 12px; min-width: 50px; text-align: center; }
+
+  /* ── 缩略点 ── */
+  #dots {
+    position: fixed; bottom: 72px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 6px; z-index: 100;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(255,255,255,.25);
+    cursor: pointer; transition: all .3s;
+  }
+  .dot.active { background: var(--cyan); transform: scale(1.4); }
+
+  /* ── 通用排版 ── */
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: .05em; }
+  h2 { font-size: 1.3rem; font-weight: 600; margin-bottom: 20px; }
+  .subtitle { font-size: 0.9rem; color: var(--gray); margin-top: 10px; }
+  .tag {
+    display: inline-block;
+    background: rgba(0,180,216,.18);
+    border: 1px solid rgba(0,180,216,.4);
+    color: var(--cyan-light);
+    padding: 4px 10px; border-radius: 12px;
+    font-size: .75rem; margin: 4px;
+  }
+  .section-label {
+    font-size: .7rem; letter-spacing: .2em;
+    color: var(--cyan); text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .divider {
+    width: 48px; height: 3px;
+    background: linear-gradient(90deg, var(--cyan), transparent);
+    margin: 16px 0;
+  }
+
+  /* ── Slide 1：封面 ── */
+  #s1 { background: var(--blue-dark); text-align: center; }
+  #s1 .logo-ring {
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 3px solid var(--cyan);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    background: radial-gradient(circle, rgba(0,180,216,.15), transparent 70%);
+    animation: pulse 3s infinite ease-in-out;
+  }
+  #s1 .logo-ring svg { width: 40px; height: 40px; fill: none; stroke: var(--cyan); stroke-width: 2; }
+  #s1 h1 { font-size: 1.6rem; line-height: 1.3; }
+  #s1 .en { font-size: .85rem; color: var(--gray); letter-spacing: .3em; margin-top: 8px; }
+  #s1 .badges { margin-top: 20px; }
+  #s1 .meta { margin-top: 30px; color: var(--gray); font-size: .75rem; line-height: 2; }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(0,180,216,.4); }
+    50% { box-shadow: 0 0 0 18px rgba(0,180,216,0); }
+  }
+
+  /* ── Slide 2：背景与挑战 ── */
+  #s2 .challenge-grid {
+    display: grid; grid-template-columns: 1fr;
+    gap: 16px; width: 100%;
+  }
+  .challenge-card {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 12px; padding: 18px;
+    border-left: 3px solid var(--gold);
+  }
+  .challenge-card .icon { font-size: 1.4rem; margin-bottom: 10px; }
+  .challenge-card h3 { font-size: .9rem; color: var(--gold); margin-bottom: 8px; }
+  .challenge-card p { font-size: .8rem; color: var(--gray); line-height: 1.6; }
+
+  /* ── Slide 3：系统定位 ── */
+  #s3 .position-box {
+    max-width: 100%; text-align: center;
+  }
+  #s3 .big-num {
+    font-size: 3.5rem; font-weight: 700;
+    background: linear-gradient(135deg, var(--cyan), var(--cyan-light));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1;
+  }
+  #s3 .metrics-row {
+    display: flex; flex-wrap: wrap; gap: 16px; margin-top: 30px; justify-content: center;
+  }
+  .metric-item { text-align: center; min-width: 80px; }
+  .metric-item .val {
+    font-size: 1.5rem; font-weight: 700; color: var(--cyan-light);
+  }
+  .metric-item .label { font-size: .7rem; color: var(--gray); margin-top: 4px; }
+
+  /* ── Slide 4：四层架构 ── */
+  #s4 .arch-wrap { width: 100%; }
+  .layer {
+    display: flex; flex-direction: column;
+    border-radius: 10px; padding: 16px;
+    margin-bottom: 10px;
+    position: relative; overflow: hidden;
+  }
+  .layer::before {
+    content: ""; position: absolute; inset: 0;
+    opacity: .07;
+  }
+  .layer-num {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: .8rem;
+    margin-bottom: 10px;
+  }
+  .layer-name { font-weight: 600; font-size: .9rem; margin-bottom: 8px; }
+  .layer-tech { font-size: .75rem; color: var(--gray); margin-bottom: 8px; line-height: 1.5; }
+  .layer-kpi {
+    font-size: .7rem;
+    padding: 4px 12px; border-radius: 10px;
+  }
+  /* 颜色变体 */
+  .l1 { background: rgba(82,183,136,.12); border: 1px solid rgba(82,183,136,.3); }
+  .l1 .layer-num { background: rgba(82,183,136,.3); color: #52b788; }
+  .l1 .layer-kpi { background: rgba(82,183,136,.15); color: #52b788; }
+
+  .l2 { background: rgba(0,180,216,.1); border: 1px solid rgba(0,180,216,.3); }
+  .l2 .layer-num { background: rgba(0,180,216,.25); color: var(--cyan); }
+  .l2 .layer-kpi { background: rgba(0,180,216,.15); color: var(--cyan); }
+
+  .l3 { background: rgba(244,162,97,.1); border: 1px solid rgba(244,162,97,.3); }
+  .l3 .layer-num { background: rgba(244,162,97,.25); color: var(--gold); }
+  .l3 .layer-kpi { background: rgba(244,162,97,.15); color: var(--gold); }
+
+  .l4 { background: rgba(162,100,220,.1); border: 1px solid rgba(162,100,220,.3); }
+  .l4 .layer-num { background: rgba(162,100,220,.25); color: #c77dff; }
+  .l4 .layer-kpi { background: rgba(162,100,220,.15); color: #c77dff; }
+
+  /* ── Slide 5：核心功能 ── */
+  #s5 .feat-grid {
+    display: grid; grid-template-columns: 1fr;
+    gap: 16px; width: 100%;
+  }
+  .feat-card {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 12px; padding: 18px;
+    transition: border-color .3s, transform .3s;
+  }
+  .feat-card:hover {
+    border-color: var(--cyan);
+    transform: translateY(-3px);
+  }
+  .feat-card .fi { font-size: 1.6rem; margin-bottom: 10px; }
+  .feat-card h3 { font-size: .85rem; margin-bottom: 8px; }
+  .feat-card p { font-size: .75rem; color: var(--gray); line-height: 1.6; }
+
+  /* ── Slide 6：训练流程 ── */
+  #s6 .flow-wrap { width: 100%; }
+  .flow-steps {
+    display: flex; flex-direction: column;
+    gap: 16px; margin-top: 8px;
+  }
+  .flow-step {
+    display: flex; align-items: flex-start; gap: 12px;
+    text-align: left; position: relative;
+  }
+  .flow-step:not(:last-child)::after {
+    content: "↓";
+    position: absolute; left: 24px; top: 70px;
+    color: var(--cyan); font-size: 1rem;
+  }
+  .step-circle {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue-accent), var(--cyan));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: .9rem; flex-shrink: 0;
+  }
+  .step-content { flex: 1; }
+  .step-name { font-size: .8rem; font-weight: 600; margin-bottom: 6px; }
+  .step-desc { font-size: .7rem; color: var(--gray); line-height: 1.5; }
+
+  .flow-detail {
+    display: grid; grid-template-columns: 1fr;
+    gap: 16px; margin-top: 24px;
+  }
+  .detail-box {
+    background: rgba(0,180,216,.06);
+    border: 1px solid rgba(0,180,216,.2);
+    border-radius: 10px; padding: 14px;
+  }
+  .detail-box h4 { font-size: .8rem; color: var(--cyan-light); margin-bottom: 8px; }
+  .detail-box ul { list-style: none; }
+  .detail-box li {
+    font-size: .75rem; color: var(--gray);
+    padding: 3px 0; padding-left: 14px; position: relative;
+  }
+  .detail-box li::before {
+    content: "·"; position: absolute; left: 0; color: var(--cyan);
+  }
+
+  /* ── Slide 7：场景库 ── */
+  #s7 .scenario-layout {
+    display: flex; flex-direction: column; gap: 20px; width: 100%;
+  }
+  .scenario-left, .scenario-right { width: 100%; }
+  .scene-stat {
+    background: rgba(0,180,216,.08);
+    border: 1px solid rgba(0,180,216,.25);
+    border-radius: 12px; padding: 20px; text-align: center;
+    margin-bottom: 16px;
+  }
+  .scene-stat .big { font-size: 2.5rem; font-weight: 700; color: var(--cyan); line-height: 1; }
+  .scene-stat .label { font-size: .8rem; color: var(--gray); margin-top: 6px; }
+
+  .diff-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .diff-badge {
+    flex: 1; text-align: center; padding: 8px 4px; border-radius: 8px;
+    font-size: .75rem;
+  }
+  .diff-badge.easy { background: rgba(82,183,136,.15); color: #52b788; border: 1px solid rgba(82,183,136,.3); }
+  .diff-badge.mid  { background: rgba(244,162,97,.15); color: var(--gold); border: 1px solid rgba(244,162,97,.3); }
+  .diff-badge.hard { background: rgba(230,57,70,.15); color: #ff6b6b; border: 1px solid rgba(230,57,70,.3); }
+
+  .clause-card {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 10px; padding: 14px; margin-bottom: 10px;
+  }
+  .clause-card h4 { font-size: .8rem; color: var(--cyan-light); margin-bottom: 8px; }
+  .clause-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ctag {
+    font-size: .7rem; padding: 2px 8px; border-radius: 10px;
+    background: rgba(255,255,255,.08); color: var(--gray);
+  }
+
+  /* ── Slide 8：评估体系 ── */
+  #s8 .eval-layout {
+    display: grid; grid-template-columns: 1fr;
+    gap: 20px; width: 100%;
+  }
+  .eval-col h3 { font-size: .9rem; color: var(--cyan-light); margin-bottom: 16px; }
+  .eval-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 12px; border-radius: 8px;
+    background: rgba(255,255,255,.04); margin-bottom: 8px;
+  }
+  .eval-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .eval-text h4 { font-size: .8rem; margin-bottom: 2px; }
+  .eval-text p { font-size: .7rem; color: var(--gray); }
+
+  .score-ring {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 24px;
+    background: rgba(0,180,216,.06);
+    border: 1px solid rgba(0,180,216,.2);
+    border-radius: 12px; margin-bottom: 16px;
+  }
+  .score-ring .score-num {
+    font-size: 3rem; font-weight: 700;
+    background: linear-gradient(135deg, var(--cyan), #90e0ef);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .score-ring .score-label { font-size: .75rem; color: var(--gray); }
+
+  /* ── Slide 9：实测数据 ── */
+  #s9 .kpi-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; width: 100%;
+  }
+  .kpi-card {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 12px; padding: 16px 12px; text-align: center;
+  }
+  .kpi-card .kpi-layer {
+    font-size: .7rem; letter-spacing: .1em; margin-bottom: 8px;
+    padding: 3px 8px; border-radius: 10px; display: inline-block;
+  }
+  .kpi-card .kpi-val {
+    font-size: 1.8rem; font-weight: 700; line-height: 1.1;
+    margin-bottom: 6px;
+  }
+  .kpi-card .kpi-name { font-size: .75rem; color: var(--gray); margin-bottom: 4px; }
+  .kpi-card .kpi-target { font-size: .7rem; color: rgba(255,255,255,.35); }
+  .kpi-card .pass-badge {
+    display: inline-block; margin-top: 8px;
+    font-size: .7rem; padding: 2px 10px; border-radius: 8px;
+    background: rgba(82,183,136,.15); color: #52b788;
+    border: 1px solid rgba(82,183,136,.3);
+  }
+
+  .kpi-c1 .kpi-layer { background: rgba(82,183,136,.15); color: #52b788; }
+  .kpi-c1 .kpi-val { color: #52b788; }
+  .kpi-c2 .kpi-layer { background: rgba(0,180,216,.15); color: var(--cyan); }
+  .kpi-c2 .kpi-val { color: var(--cyan-light); }
+  .kpi-c3 .kpi-layer { background: rgba(244,162,97,.15); color: var(--gold); }
+  .kpi-c3 .kpi-val { color: var(--gold); }
+  .kpi-c4 .kpi-layer { background: rgba(162,100,220,.15); color: #c77dff; }
+  .kpi-c4 .kpi-val { color: #c77dff; }
+
+  .kpi-summary {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin-top: 16px; width: 100%;
+  }
+  .kpi-sum-item {
+    text-align: center;
+    background: rgba(82,183,136,.08);
+    border: 1px solid rgba(82,183,136,.25);
+    border-radius: 10px; padding: 12px 8px;
+  }
+  .kpi-sum-item .sv { font-size: 1.3rem; font-weight: 700; color: #52b788; }
+  .kpi-sum-item .sl { font-size: .7rem; color: var(--gray); margin-top: 4px; }
+
+  /* ── Slide 10：总结 ── */
+  #s10 { text-align: center; }
+  #s10 .sum-grid {
+    display: flex; flex-direction: column; gap: 16px; margin-top: 24px;
+  }
+  .sum-card {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 14px; padding: 20px 16px;
+  }
+  .sum-card .icon { font-size: 1.5rem; margin-bottom: 12px; }
+  .sum-card h3 { font-size: .85rem; margin-bottom: 10px; color: var(--cyan-light); }
+  .sum-card p { font-size: .75rem; color: var(--gray); line-height: 1.7; }
+
+  /* ── 键盘提示 ── */
+  #hint {
+    display: none;
+    position: fixed; bottom: 110px; right: 20px;
+    font-size: .7rem; color: rgba(255,255,255,.25);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+
+<div class="deck" id="deck">
+
+  <!-- ══ SLIDE 1 · 封面 ══ -->
+  <section class="slide" id="s1">
+    <div class="logo-ring">
+      <svg viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r="18" stroke-dasharray="6 4"/>
+        <path d="M14 24 Q24 10 34 24 Q24 38 14 24Z" stroke-linejoin="round"/>
+        <circle cx="24" cy="24" r="4" fill="var(--cyan)" stroke="none"/>
+      </svg>
+    </div>
+    <div class="section-label">旅顺通 · LushunVoice</div>
+    <h1>12306客服智能<br>语音训练系统</h1>
+    <div class="en">Intelligent Voice Training System for 12306 Customer Service</div>
+    <div class="badges">
+      <span class="tag">豆包实时语音大模型</span>
+      <span class="tag">PyQt5 桌面端</span>
+      <span class="tag">四层架构</span>
+      <span class="tag">Windows 单机部署</span>
+    </div>
+    <div class="meta">
+      武汉铁路职教基地 · QC小组课题成果<br>
+      版本 v2.0 &nbsp;|&nbsp; 2026
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 2 · 背景与挑战 ══ -->
+  <section class="slide" id="s2">
+    <div class="section-label">Background</div>
+    <h2>背景与痛点</h2>
+    <div class="challenge-grid">
+      <div class="challenge-card">
+        <div class="icon">📞</div>
+        <h3>传统培训模式低效</h3>
+        <p>人工陪练成本高、场景覆盖不足，客服人员无法充分模拟高压投诉、突发改签等复杂对话场景。</p>
+      </div>
+      <div class="challenge-card">
+        <div class="icon">📊</div>
+        <h3>评估缺乏客观标准</h3>
+        <p>以往凭经验主观打分，缺少针对12306服务规范的逐条量化评估，训练结果难以追踪。</p>
+      </div>
+      <div class="challenge-card">
+        <div class="icon">🔒</div>
+        <h3>数据安全与离线要求</h3>
+        <p>铁路业务数据涉及敏感信息，需在完全离线环境下运行，不允许依赖云端数据库或外部存储。</p>
+      </div>
+      <div class="challenge-card">
+        <div class="icon">⚡</div>
+        <h3>系统响应延迟影响体验</h3>
+        <p>语音交互系统若首帧延迟过高，将打断对话节奏，严重影响训练沉浸感与使用意愿。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 3 · 系统定位 ══ -->
+  <section class="slide" id="s3">
+    <div class="section-label">Overview</div>
+    <h2>系统定位</h2>
+    <div class="position-box">
+      <p style="color:var(--gray);font-size:.85rem;line-height:1.8;max-width:100%;margin:0 auto 20px">
+        旅顺通是专为 <strong style="color:var(--white)">12306客服坐席</strong> 设计的全功能语音对话训练平台，
+        通过 <strong style="color:var(--cyan)">AI旅客角色扮演</strong> + <strong style="color:var(--cyan)">规章条款自动评估</strong>，
+        实现"随时可练、客观可评、记录可查"的智能化训练闭环。
+      </p>
+      <div class="metrics-row">
+        <div class="metric-item">
+          <div class="val">71+</div>
+          <div class="label">训练场景</div>
+        </div>
+        <div class="metric-item">
+          <div class="val">24</div>
+          <div class="label">规章条款</div>
+        </div>
+        <div class="metric-item">
+          <div class="val">3</div>
+          <div class="label">难度等级</div>
+        </div>
+        <div class="metric-item">
+          <div class="val">93%</div>
+          <div class="label">综合满意度</div>
+        </div>
+        <div class="metric-item">
+          <div class="val">44/44</div>
+          <div class="label">集成用例通过</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 4 · 四层架构 ══ -->
+  <section class="slide" id="s4">
+    <div class="section-label">Architecture</div>
+    <h2>系统四层架构</h2>
+    <div class="arch-wrap">
+      <div class="layer l4">
+        <div class="layer-num">L4</div>
+        <div class="layer-name">展示层</div>
+        <div class="layer-tech">PyQt5 桌面 GUI · 波形动画 · 历史回放 · 成绩报告</div>
+        <div class="layer-kpi">音频延迟 ≤ 10ms &nbsp;·&nbsp; 满意度 ≥ 92%</div>
+      </div>
+      <div class="layer l3">
+        <div class="layer-num">L3</div>
+        <div class="layer-name">业务逻辑层</div>
+        <div class="layer-tech">Python 规则引擎 · 场景注入 · 红线校验 · 通话压力计算</div>
+        <div class="layer-kpi">迭代周期 ≤ 2天 &nbsp;·&nbsp; 内存 ≤ 700MB</div>
+      </div>
+      <div class="layer l2">
+        <div class="layer-num">L2</div>
+        <div class="layer-name">模型服务层</div>
+        <div class="layer-tech">豆包实时语音大模型 · 流式 ASR · BigTTS · DeepSeek 评估</div>
+        <div class="layer-kpi">TTFT ≤ 48ms &nbsp;·&nbsp; P90 ≤ 120ms</div>
+      </div>
+      <div class="layer l1">
+        <div class="layer-num">L1</div>
+        <div class="layer-name">基础数据层</div>
+        <div class="layer-tech">JSON 本地加密存储（Fernet）· 场景库 · 知识库 · 训练历史</div>
+        <div class="layer-kpi">读写延迟 ≤ 150ms &nbsp;·&nbsp; 100% 离线</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 5 · 核心功能 ══ -->
+  <section class="slide" id="s5">
+    <div class="section-label">Features</div>
+    <h2>核心功能模块</h2>
+    <div class="feat-grid">
+      <div class="feat-card">
+        <div class="fi">🎭</div>
+        <h3>AI旅客角色扮演</h3>
+        <p>豆包实时语音模型扮演不同画像旅客（购票/改签/投诉），按通话压力自动调整语气与对话策略。</p>
+      </div>
+      <div class="feat-card">
+        <div class="fi">📋</div>
+        <h3>场景库管理</h3>
+        <p>内置71+场景，分初级/中级/高级三档，支持搜索、筛选、编辑，场景数据Fernet加密保存。</p>
+      </div>
+      <div class="feat-card">
+        <div class="fi">⚖️</div>
+        <h3>规章条款评估</h3>
+        <p>24条规章条款（服务用语7条·售票规程9条·运输规程8条），按场景配置，AI逐条量化打分。</p>
+      </div>
+      <div class="feat-card">
+        <div class="fi">🔊</div>
+        <h3>多音色语音合成</h3>
+        <p>4个音色按旅客性别/年龄画像动态分配，连续对话不重复音色，保证多样化训练体验。</p>
+      </div>
+      <div class="feat-card">
+        <div class="fi">📼</div>
+        <h3>训练历史回放</h3>
+        <p>完整保存全程录音（full_recording.wav）与分段记录，支持历史对话回放审听与对比。</p>
+      </div>
+      <div class="feat-card">
+        <div class="fi">📚</div>
+        <h3>知识库编辑器</h3>
+        <p>内嵌Markdown知识库，章节树导航+富文本编辑，加密存储，规划按需注入对话上下文。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 6 · 训练流程 ══ -->
+  <section class="slide" id="s6">
+    <div class="section-label">Workflow</div>
+    <h2>一次完整训练流程</h2>
+    <div class="flow-wrap">
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="step-circle">1</div>
+          <div class="step-content">
+            <div class="step-name">选择场景</div>
+            <div class="step-desc">按环境/难度从场景库中选定</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-circle">2</div>
+          <div class="step-content">
+            <div class="step-name">配置旅客</div>
+            <div class="step-desc">随机生成画像与音色</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-circle">3</div>
+          <div class="step-content">
+            <div class="step-name">实时对话</div>
+            <div class="step-desc">语音交互通话压力动态更新</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-circle">4</div>
+          <div class="step-content">
+            <div class="step-name">AI评估</div>
+            <div class="step-desc">DeepSeek逐条规章条款打分</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-circle">5</div>
+          <div class="step-content">
+            <div class="step-name">报告归档</div>
+            <div class="step-desc">成绩+录音保存·可回放</div>
+          </div>
+        </div>
+      </div>
+      <div class="flow-detail">
+        <div class="detail-box">
+          <h4>对话过程中</h4>
+          <ul>
+            <li>首帧语音延迟实测 43ms</li>
+            <li>通话压力实时计算（重复词 +16分/次）</li>
+            <li>红线词自动检测，触发即标记</li>
+            <li>教师可实时通过502消息干预场景</li>
+          </ul>
+        </div>
+        <div class="detail-box">
+          <h4>训练结束后</h4>
+          <ul>
+            <li>生成统一格式 full_recording.wav</li>
+            <li>DeepSeek 对照规章逐条输出评语</li>
+            <li>历史记录可按日期/场景筛选回放</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 7 · 场景库 ══ -->
+  <section class="slide" id="s7">
+    <div class="section-label">Scenario Library</div>
+    <h2>场景库与规章条款</h2>
+    <div class="scenario-layout">
+      <div class="scenario-left">
+        <div class="scene-stat">
+          <div class="big">71+</div>
+          <div class="label">训练场景 &nbsp;·&nbsp; ID 1~79</div>
+        </div>
+        <div class="diff-row">
+          <div class="diff-badge easy">初级<br><small>基础服务流程</small></div>
+          <div class="diff-badge mid">中级<br><small>投诉/改签处理</small></div>
+          <div class="diff-badge hard">高级<br><small>复合压力场景</small></div>
+        </div>
+        <div style="margin-top:16px">
+          <div class="tag">购票</div><div class="tag">改签</div>
+          <div class="tag">退票</div><div class="tag">投诉</div>
+          <div class="tag">晚点</div><div class="tag">儿童免票</div>
+          <div class="tag">差价退补</div><div class="tag">接续换乘</div>
+        </div>
+      </div>
+      <div class="scenario-right">
+        <div class="clause-card">
+          <h4>服务用语规范（7条）</h4>
+          <div class="clause-tags">
+            <span class="ctag">十字文明用语</span>
+            <span class="ctag">禁用语</span>
+            <span class="ctag">情绪先行</span>
+            <span class="ctag">重复解释</span>
+            <span class="ctag">超范围应答</span>
+            <span class="ctag">等待管理</span>
+            <span class="ctag">开场问候</span>
+          </div>
+        </div>
+        <div class="clause-card">
+          <h4>售票业务规程（9条）</h4>
+          <div class="clause-tags">
+            <span class="ctag">售票六字法</span>
+            <span class="ctag">改签六字法</span>
+            <span class="ctag">改签次数限制</span>
+            <span class="ctag">开车后改签</span>
+            <span class="ctag">退票手续费</span>
+            <span class="ctag">高改低差价</span>
+            <span class="ctag">晚点接续退票</span>
+            <span class="ctag">儿童免票</span>
+            <span class="ctag">退款到账时间</span>
+          </div>
+        </div>
+        <div class="clause-card">
+          <h4>铁路运输规程 + 12306客服规范（8条）</h4>
+          <div class="clause-tags">
+            <span class="ctag">旅客运输规程</span>
+            <span class="ctag">实名制核验</span>
+            <span class="ctag">特殊旅客服务</span>
+            <span class="ctag">行李托运规定</span>
+            <span class="ctag">客服升级流程</span>
+            <span class="ctag">工单处理时限</span>
+            <span class="ctag">隐私保护规范</span>
+            <span class="ctag">通话录音告知</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 8 · 评估体系 ══ -->
+  <section class="slide" id="s8">
+    <div class="section-label">Evaluation</div>
+    <h2>智能评估体系</h2>
+    <div class="eval-layout">
+      <div class="eval-col">
+        <h3>评估维度</h3>
+        <div class="eval-item">
+          <div class="eval-icon">🎯</div>
+          <div class="eval-text">
+            <h4>规章合规评分</h4>
+            <p>24条条款逐条对照，DeepSeek分析对话全文，按触犯/遵守计分</p>
+          </div>
+        </div>
+        <div class="eval-item">
+          <div class="eval-icon">😤</div>
+          <div class="eval-text">
+            <h4>通话压力指数</h4>
+            <p>实时追踪旅客情绪词频次，首次+10分，每多一次额外+16分</p>
+          </div>
+        </div>
+        <div class="eval-item">
+          <div class="eval-icon">✅</div>
+          <div class="eval-text">
+            <h4>场景成功标准</h4>
+            <p>按场景定义的业务成功条件（如是否成功完成改签、安抚旅客等）</p>
+          </div>
+        </div>
+        <div class="eval-item">
+          <div class="eval-icon">🚫</div>
+          <div class="eval-text">
+            <h4>红线词检测</h4>
+            <p>自动识别禁用语，触发即标记，独立计入重大失分项</p>
+          </div>
+        </div>
+      </div>
+      <div class="eval-col">
+        <div class="score-ring">
+          <div class="score-num">93</div>
+          <div class="score-label">实测综合满意度（n=63）</div>
+        </div>
+        <h3>评估输出</h3>
+        <div class="eval-item">
+          <div class="eval-icon">📄</div>
+          <div class="eval-text">
+            <h4>结构化成绩报告</h4>
+            <p>按层级输出分项得分 + 逐条评语 + 改进建议</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 9 · 实测数据 ══ -->
+  <section class="slide" id="s9">
+    <div class="section-label">Test Results</div>
+    <h2>测试报告关键指标（实测）</h2>
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-c1">
+        <div class="kpi-layer">数据层</div>
+        <div class="kpi-val">87<small style="font-size:1rem">ms</small></div>
+        <div class="kpi-name">读写延迟</div>
+        <div class="kpi-target">目标 ≤ 150ms</div>
+        <div class="pass-badge">✓ 达标</div>
+      </div>
+      <div class="kpi-card kpi-c2">
+        <div class="kpi-layer">模型层</div>
+        <div class="kpi-val">43<small style="font-size:1rem">ms</small></div>
+        <div class="kpi-name">首帧延迟 TTFT</div>
+        <div class="kpi-target">目标 ≤ 48ms</div>
+        <div class="pass-badge">✓ 达标</div>
+      </div>
+      <div class="kpi-card kpi-c3">
+        <div class="kpi-layer">逻辑层</div>
+        <div class="kpi-val">542<small style="font-size:1rem">MB</small></div>
+        <div class="kpi-name">内存峰值</div>
+        <div class="kpi-target">目标 ≤ 700MB</div>
+        <div class="pass-badge">✓ 达标</div>
+      </div>
+      <div class="kpi-card kpi-c4">
+        <div class="kpi-layer">展示层</div>
+        <div class="kpi-val">6<small style="font-size:1rem">ms</small></div>
+        <div class="kpi-name">音频延迟</div>
+        <div class="kpi-target">目标 ≤ 10ms</div>
+        <div class="pass-badge">✓ 达标</div>
+      </div>
+    </div>
+    <div class="kpi-summary">
+      <div class="kpi-sum-item">
+        <div class="sv">1'28"</div>
+        <div class="sl">完整安装耗时</div>
+      </div>
+      <div class="kpi-sum-item">
+        <div class="sv">P90 108ms</div>
+        <div class="sl">模型响应90百分位</div>
+      </div>
+      <div class="kpi-sum-item">
+        <div class="sv">1.5天</div>
+        <div class="sl">平均迭代周期</div>
+      </div>
+      <div class="kpi-sum-item">
+        <div class="sv">44/44</div>
+        <div class="sl">集成测试用例全通过</div>
+      </div>
+      <div class="kpi-sum-item">
+        <div class="sv">0</div>
+        <div class="sl">一级缺陷数</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ SLIDE 10 · 总结 ══ -->
+  <section class="slide" id="s10">
+    <div class="section-label">Summary</div>
+    <h2>总结</h2>
+    <div class="sum-grid">
+      <div class="sum-card">
+        <div class="icon">🏗️</div>
+        <h3>架构清晰</h3>
+        <p>四层分离设计，数据/模型/逻辑/展示职责明确，迭代周期缩短到1.5天，满足业务快速响应需求。</p>
+      </div>
+      <div class="sum-card">
+        <div class="icon">🔐</div>
+        <h3>安全可靠</h3>
+        <p>数据全程Fernet加密，100%离线运行，无并发风险，Windows单机部署，符合铁路数据安全要求。</p>
+      </div>
+      <div class="sum-card">
+        <div class="icon">📈</div>
+        <h3>指标全达</h3>
+        <p>四层13项量化指标全部达标，44个集成测试用例零缺陷通过，用户综合满意度达93%（n=63）。</p>
+      </div>
+      <div class="sum-card">
+        <div class="icon">🚀</div>
+        <h3>持续演进</h3>
+        <p>场景专属条款配置、知识库按需注入、音色扩展等方向已规划，系统具备持续迭代能力。</p>
+      </div>
+    </div>
+    <div style="margin-top:24px;color:var(--gray);font-size:.75rem">
+      武汉铁路职教基地 · QC小组课题 &nbsp;·&nbsp; 2026
+    </div>
+  </section>
+
+</div><!-- /deck -->
+
+<div id="dots"></div>
+<div id="nav">
+  <button id="prevBtn">← 上一页</button>
+  <span id="slide-counter">1 / 10</span>
+  <button id="nextBtn">下一页 →</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let cur = 0;
+
+  const dotsEl = document.getElementById('dots');
+  const counter = document.getElementById('slide-counter');
+  const bar = document.getElementById('progress-bar');
+
+  // 生成圆点
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.addEventListener('click', () => goTo(i));
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(n, forward = true) {
+    if (n === cur) return;
+    slides[cur].classList.remove('active');
+    slides[cur].classList.add('exit');
+    setTimeout(() => slides[cur].classList.remove('exit'), 500);
+    cur = ((n % total) + total) % total;
+    slides[cur].classList.add('active');
+    update();
+    // 翻页后滚动到顶部
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }
+
+  function update() {
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === cur);
+    });
+    counter.textContent = `${cur + 1} / ${total}`;
+    bar.style.width = `${((cur + 1) / total) * 100}%`;
+  }
+
+  // 初始化第一页
+  slides[0].classList.add('active');
+  bar.style.width = `${(1 / total) * 100}%`;
+
+  document.getElementById('nextBtn').addEventListener('click', () => goTo(cur + 1));
+  document.getElementById('prevBtn').addEventListener('click', () => goTo(cur - 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'Space') { e.preventDefault(); goTo(cur + 1); }
+    if (e.key === 'ArrowLeft') goTo(cur - 1);
+  });
+
+  // 触控滑动
+  let tx = 0;
+  document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) dx < 0 ? goTo(cur + 1) : goTo(cur - 1);
+  });
+
+  // 防止页面缩放
+  document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+  });
+  document.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+  });
+  document.addEventListener('gestureend', (e) => {
+    e.preventDefault();
+  });
+</script>
+</body>
+</html>
